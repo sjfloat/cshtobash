@@ -19,6 +19,16 @@ trap 'rm -f /tmp/cb$$.? cshout cshin' 0 1 2 3 6 15
 
 T=$'\t'
 
+source_dot_cshrc=1
+while getopts S opt
+do
+    case $opt in
+        S) source_dot_cshrc=0;;
+        *) exit 1;;
+    esac
+done
+shift $(($OPTIND - 1))
+
 SOURCE="${1:+source $1}"
 
 cat << EOF >cshin
@@ -28,8 +38,13 @@ setenv >! /tmp/cb$$.e
 set >! /tmp/cb$$.v
 EOF
 
+flags='-i'
+if [ $source_dot_cshrc -ne 1 ]; then
+    flags=${flags}f
+fi
+
 # give csh a minimal environment, similar to what login would provide
-/usr/bin/env - USER=$USER HOME=$HOME PATH=/usr/bin:/bin:/usr/ucb:. TERM=$TERM SHELL=$SHELL /bin/csh -i < ./cshin > cshout 2>&1
+/usr/bin/env - USER=$USER HOME=$HOME PATH=/usr/bin:/bin:/usr/ucb:. TERM=$TERM SHELL=$SHELL /bin/csh $flags < ./cshin > cshout 2>&1
 
 # First convert aliases
 
