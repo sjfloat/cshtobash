@@ -20,14 +20,25 @@ trap 'rm -f /tmp/cb$$.? cshout cshin' 0 1 2 3 6 15
 T=$'\t'
 
 source_dot_cshrc=1
-while getopts S opt
+do_aliases=0
+do_environment_variables=0
+do_shell_variables=0
+while getopts Saev opt
 do
     case $opt in
         S) source_dot_cshrc=0;;
+        a) do_aliases=1;;
+        e) do_environment_variables=1;;
+        v) do_shell_variables=1;;
         *) exit 1;;
     esac
 done
 shift $(($OPTIND - 1))
+if [ $do_aliases -ne 1 -a $do_environment_variables -ne 1 -a $do_shell_variables -ne 1 ]; then
+    do_aliases=1
+    do_environment_variables=1
+    do_shell_variables=1
+fi
 
 SOURCE="${1:+source $1}"
 
@@ -64,82 +75,91 @@ mkalias ()
 }
 EOF
 
-sed "s/^\([a-zA-Z0-9_]*\)$T\(.*\)$/mkalias \1 '\2'/" < /tmp/cb$$.a >>/tmp/cb$$.1
+if [ $do_aliases -eq 1 ]; then
+    sed "s/^\([a-zA-Z0-9_]*\)$T\(.*\)$/mkalias \1 '\2'/" < /tmp/cb$$.a >>/tmp/cb$$.1
 
-echo '# csh aliases'
-echo
+    echo '# csh aliases'
+    echo
 
-$BASH /tmp/cb$$.1 | sed -e 's/\$cwd/\$PWD/g' \
-		   -e 's/\$term/\$TERM/g' \
-		   -e 's/\$home/\$HOME/g' \
-		   -e 's/\$user/\$USER/g' \
-		   -e 's/\$prompt/\$PS1/g'
+    $BASH /tmp/cb$$.1 | sed -e 's/\$cwd/\$PWD/g' \
+               -e 's/\$term/\$TERM/g' \
+               -e 's/\$home/\$HOME/g' \
+               -e 's/\$user/\$USER/g' \
+               -e 's/\$prompt/\$PS1/g'
+fi
 
-# Next, convert environment variables
-echo
-echo '# csh environment variables'
-echo
+if [ $do_environment_variables -eq 1 ]; then
+    # Next, convert environment variables
+    echo
+    echo '# csh environment variables'
+    echo
 
-# Would be nice to deal with embedded newlines, e.g. in TERMCAP, but ...
-sed -e '/^SHLVL/d' \
-    -e '/^PWD/d' \
-    -e "s/'/'"\\\\"''"/g \
-    -e "s/^\([A-Za-z0-9_]*=\)/export \1'/" \
-    -e "s/$/'/" < /tmp/cb$$.e
+    # Would be nice to deal with embedded newlines, e.g. in TERMCAP, but ...
+    sed -e '/^SHLVL/d' \
+        -e '/^PWD/d' \
+        -e "s/'/'"\\\\"''"/g \
+        -e "s/^\([A-Za-z0-9_]*=\)/export \1'/" \
+        -e "s/$/'/" < /tmp/cb$$.e
+fi
 
-# Finally, convert local variables
-echo
-echo '# csh variables'
-echo
+if [ $do_shell_variables -eq 1 ]; then
+    # Finally, convert local variables
+    echo
+    echo '# csh variables'
+    echo
 
-sed -e 's/'"$T"'/=/' \
-    -e "s/'/'"\\\\"''"/g \
-    -e '/^[A-Za-z0-9_]*=[^(]/{
-	s/=/='"'/"'
-	s/$/'"'/"'
-	}' < /tmp/cb$$.v |
-sed -e '/^argv=/d' -e '/^cwd=/d' -e '/^filec=/d' -e '/^status=/d' \
-	 -e '/^verbose=/d' \
-	 -e '/^term=/d' \
-	 -e '/^home=/d' \
-	 -e '/^path=/d' \
-	 -e '/^user=/d' \
-	 -e '/^shell=/d' \
-	 -e '/^cdpath=/d' \
-	 -e '/^mail=/d' \
-	 -e '/^home=/s//HOME=/' \
-	 -e '/^prompt=/s//PS1=/' \
-	 -e '/^histfile=/s//HISTFILE=/' \
-	 -e '/^history=/s//HISTSIZE=/' \
-	 -e '/^savehist=$/s//HISTFILESIZE=${HISTSIZE-500}/' \
-	 -e '/^savehist=/s//HISTFILESIZE=/' \
-	 -e '/^ignoreeof=$/s/^.*$/set -o ignoreeof # ignoreeof/' \
-	 -e '/^ignoreeof=/s//IGNOREEOF=/' \
-	 -e '/^noclobber=/s/^.*$/set -C # noclobber/' \
-	 -e '/^notify=/s/^.*$/set -b # notify/' \
-	 -e '/^noglob=/s/^.*$/set -f # noglob/' \
+    sed -e 's/'"$T"'/=/' \
+        -e "s/'/'"\\\\"''"/g \
+        -e '/^[A-Za-z0-9_]*=[^(]/{
+        s/=/='"'/"'
+        s/$/'"'/"'
+        }' < /tmp/cb$$.v |
+    sed -e '/^argv=/d' -e '/^cwd=/d' -e '/^filec=/d' -e '/^status=/d' \
+         -e '/^verbose=/d' \
+         -e '/^term=/d' \
+         -e '/^home=/d' \
+         -e '/^path=/d' \
+         -e '/^user=/d' \
+         -e '/^shell=/d' \
+         -e '/^cdpath=/d' \
+         -e '/^mail=/d' \
+         -e '/^home=/s//HOME=/' \
+         -e '/^prompt=/s//PS1=/' \
+         -e '/^histfile=/s//HISTFILE=/' \
+         -e '/^history=/s//HISTSIZE=/' \
+         -e '/^savehist=$/s//HISTFILESIZE=${HISTSIZE-500}/' \
+         -e '/^savehist=/s//HISTFILESIZE=/' \
+         -e '/^ignoreeof=$/s/^.*$/set -o ignoreeof # ignoreeof/' \
+         -e '/^ignoreeof=/s//IGNOREEOF=/' \
+         -e '/^noclobber=/s/^.*$/set -C # noclobber/' \
+         -e '/^notify=/s/^.*$/set -b # notify/' \
+         -e '/^noglob=/s/^.*$/set -f # noglob/' \
 
-
-# now some special csh variables converted to bash equivalents
-echo
-echo '# special csh variables converted to bash equivalents'
-echo
-
-sed -e 's/'"$T"'/=/' < /tmp/cb$$.v |
-grep "^cdpath=" |
-sed 's/(//
-     s/ /:/g
-     s/)//
-     s/cdpath=/CDPATH=/'
+fi
 
 
-sed -e 's/'"$T"'/=/' < /tmp/cb$$.v |
-grep "^mail=" |
-sed 's/(//
-     s/ /:/g
-     s/)//
-     s/mail=/MAILPATH=/' |
-sed -e 's/MAILPATH=\([0-9][0-9][^:]*\)$/MAILCHECK=\1/' \
-    -e 's/MAILPATH=\([0-9][0-9][^:]*\):\(.*\)/MAILCHECK=\1 MAILPATH=\2/'
+if [ $do_environment_variables -eq 1 ]; then
+    # now some special csh variables converted to bash equivalents
+    echo
+    echo '# special csh variables converted to bash equivalents'
+    echo
+
+    sed -e 's/'"$T"'/=/' < /tmp/cb$$.v |
+    grep "^cdpath=" |
+    sed 's/(//
+         s/ /:/g
+         s/)//
+         s/cdpath=/CDPATH=/'
+
+
+    sed -e 's/'"$T"'/=/' < /tmp/cb$$.v |
+    grep "^mail=" |
+    sed 's/(//
+         s/ /:/g
+         s/)//
+         s/mail=/MAILPATH=/' |
+    sed -e 's/MAILPATH=\([0-9][0-9][^:]*\)$/MAILCHECK=\1/' \
+        -e 's/MAILPATH=\([0-9][0-9][^:]*\):\(.*\)/MAILCHECK=\1 MAILPATH=\2/'
+fi
 
 exit 0
